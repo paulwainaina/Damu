@@ -29,8 +29,10 @@ func (triage *Triage) UnmarshalJSON(data []byte) error {
 		switch strings.ToLower(k) {
 		case "id":
 			{
-				if v.(string)==""{ break}
-				x,err:=strconv.ParseUint(v.(string),10,64)
+				if v.(string) == "" {
+					break
+				}
+				x, err := strconv.ParseUint(v.(string), 10, 64)
 				if err != nil {
 					return err
 				}
@@ -140,7 +142,7 @@ func (triages *Triages) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	type Error struct{ Error string }
 	if r.URL.Path == "/triage" {
 		switch r.Method {
-		
+
 		case http.MethodPut:
 			{
 				triage := Triage{}
@@ -196,8 +198,8 @@ func (triages *Triages) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(triages.Triages)
 			return
 		}
-	}else{
-		matches :=triages.pattern.FindStringSubmatch(r.URL.Path)
+	} else {
+		matches := triages.pattern.FindStringSubmatch(r.URL.Path)
 		if len(matches) == 0 {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -207,11 +209,21 @@ func (triages *Triages) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		switch(r.Method){
-			case http.MethodGet:
+		switch r.Method {
+		case http.MethodGet:
 			{
-				
+
 				p, err := triages.GetTriage(uint64(id))
+				if err != nil {
+					json.NewEncoder(w).Encode(Error{Error: err.Error()})
+					return
+				}
+				json.NewEncoder(w).Encode(p)
+				return
+			}
+		case http.MethodPost:
+			{
+				p, err := triages.GetTriagePatient(uint64(id))
 				if err != nil {
 					json.NewEncoder(w).Encode(Error{Error: err.Error()})
 					return
