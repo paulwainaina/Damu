@@ -53,10 +53,10 @@
                                 <button type="button" value="add" id="add" class="btn btn-primary">Add</button>
                             </div>
                             <div class="col-md-4">
-                                <button type="button" value="update" id="update"    class="btn btn-secondary">Update</button>
+                                <button type="button" value="update" id="updated"    class="btn btn-secondary">Update</button>
                             </div>
                             <div class="col-md-4">
-                                <button type="button" value="delete" id="delete" class="btn btn-danger">Delete</button>
+                                <button type="button" value="delete" id="deleted" class="btn btn-danger">Delete</button>
                             </div>
                         </div>
                     </form>
@@ -120,8 +120,8 @@
                             er.innerHTML=e
                         }) 
             })
-            document.getElementById("update").addEventListener("click",()=>{
-                fetch('http://127.0.0.1:8888/patient',{ method:'PUT',headers:{'Content-Type':'application/json'},body:data}).then(
+            document.getElementById("updated").addEventListener("click",()=>{
+                fetch('http://127.0.0.1:8888/patient',{ method:'PUT',headers:{'Content-Type':'application/json'},body:getdata()}).then(
                         (result)=>{                    
                         return result.json()
                         }
@@ -148,8 +148,8 @@
                             er.innerHTML=e
                         }) 
             })
-            document.getElementById("delete").addEventListener("click",()=>{
-                fetch('http://127.0.0.1:8888/patient',{ method:'DELETE',headers:{'Content-Type':'application/json'},body:data}).then(
+            document.getElementById("deleted").addEventListener("click",()=>{
+                fetch('http://127.0.0.1:8888/patient',{ method:'DELETE',headers:{'Content-Type':'application/json'},body:getdata()}).then(
                         (result)=>{                    
                         return result.json()
                         }
