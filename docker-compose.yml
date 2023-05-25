@@ -1,0 +1,23 @@
+services:
+  bulksms:
+    container_name: front
+    restart: always
+    build: ./frontend
+    ports:
+      - "8889:8889"
+    depends_on:
+      - bulkdb 
+    networks:
+      - bulk
+  back:
+    container_name: back
+    restart: always
+    build: ./backend
+    ports:
+      - "8888:8888"
+    networks:
+      - bulk 
+
+networks:
+  bulk:
+    driver: bridge
