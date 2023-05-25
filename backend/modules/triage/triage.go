@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -27,7 +29,12 @@ func (triage *Triage) UnmarshalJSON(data []byte) error {
 		switch strings.ToLower(k) {
 		case "id":
 			{
-				triage.ID = uint64(v.(float64))
+				if v.(string)==""{ break}
+				x,err:=strconv.ParseUint(v.(string),10,64)
+				if err != nil {
+					return err
+				}
+				triage.ID = x
 			}
 		case "doctorname":
 			{
@@ -56,10 +63,11 @@ func (triage *Triage) UnmarshalJSON(data []byte) error {
 
 type Triages struct {
 	Triages []*Triage
+	pattern *regexp.Regexp
 }
 
 func NewTriages() *Triages {
-	return &Triages{Triages: make([]*Triage, 0)}
+	return &Triages{Triages: make([]*Triage, 0), pattern: regexp.MustCompile(`^/triage/(\d+)/?`)}
 }
 func (triages *Triages) GenerateNewID() uint64 {
 	var x uint64 = 0
@@ -86,6 +94,14 @@ func (triages *Triages) GenerateNewID() uint64 {
 func (triages *Triages) GetTriage(id uint64) (*Triage, error) {
 	for _, p := range triages.Triages {
 		if p.ID == id {
+			return p, nil
+		}
+	}
+	return &Triage{}, fmt.Errorf("triage %v not found", id)
+}
+func (triages *Triages) GetTriagePatient(id uint64) (*Triage, error) {
+	for _, p := range triages.Triages {
+		if p.PatientID == id {
 			return p, nil
 		}
 	}
@@ -120,25 +136,11 @@ func (triages *Triages) UpdateTriage(triage Triage) (*Triage, error) {
 }
 
 func (triages *Triages) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	type Error struct{ Error string }
 	if r.URL.Path == "/triage" {
 		switch r.Method {
-		case http.MethodGet:
-			{
-				triage := Triage{}
-				err := json.NewDecoder(r.Body).Decode(&triage)
-				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-				p, err := triages.GetTriage(triage.ID)
-				if err != nil {
-					json.NewEncoder(w).Encode(Error{Error: err.Error()})
-					return
-				}
-				json.NewEncoder(w).Encode(p)
-				return
-			}
+		
 		case http.MethodPut:
 			{
 				triage := Triage{}
@@ -148,6 +150,22 @@ func (triages *Triages) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				p, err := triages.UpdateTriage(triage)
+				if err != nil {
+					json.NewEncoder(w).Encode(Error{Error: err.Error()})
+					return
+				}
+				json.NewEncoder(w).Encode(p)
+				return
+			}
+		case http.MethodPost:
+			{
+				triage := Triage{}
+				err := json.NewDecoder(r.Body).Decode(&triage)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				p, err := triages.AddTriage(triage)
 				if err != nil {
 					json.NewEncoder(w).Encode(Error{Error: err.Error()})
 					return
@@ -177,6 +195,30 @@ func (triages *Triages) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			json.NewEncoder(w).Encode(triages.Triages)
 			return
+		}
+	}else{
+		matches :=triages.pattern.FindStringSubmatch(r.URL.Path)
+		if len(matches) == 0 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		id, err := strconv.ParseInt(matches[1], 10, 64)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		switch(r.Method){
+			case http.MethodGet:
+			{
+				
+				p, err := triages.GetTriage(uint64(id))
+				if err != nil {
+					json.NewEncoder(w).Encode(Error{Error: err.Error()})
+					return
+				}
+				json.NewEncoder(w).Encode(p)
+				return
+			}
 		}
 	}
 	w.WriteHeader(http.StatusNotImplemented)

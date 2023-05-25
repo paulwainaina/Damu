@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -25,36 +27,47 @@ func (patient *Patient) UnmarshalJSON(data []byte) error {
 	}
 	for k, v := range jsonData {
 		switch strings.ToLower(k) {
-		case "id":{
-			patient.ID=uint64(v.(float64))
-		}
-		case "name":{
-			patient.Name=v.(string)
-		}
-		case "gender":{
-			patient.Gender=v.(string)
-		}
-		case "bloodgroup":{
-			patient.BloodGroup=v.(string)
-		}
-		case "dateofbirth":{			
-			_,err:=time.Parse(time.DateOnly,v.(string))
-			if err!=nil{
-				return err
+		case "id":
+			{
+				if v.(string)==""{ break}
+				x,err:=strconv.ParseUint(v.(string),10,64)
+				if err != nil {
+					return err
+				}
+				patient.ID = x
 			}
-			patient.DateofBirth=v.(string)
-		}
+		case "name":
+			{
+				patient.Name = v.(string)
+			}
+		case "gender":
+			{
+				patient.Gender = v.(string)
+			}
+		case "bloodgroup":
+			{
+				patient.BloodGroup = v.(string)
+			}
+		case "dateofbirth":
+			{
+				_, err := time.Parse(time.DateOnly, v.(string))
+				if err != nil {
+					return err
+				}
+				patient.DateofBirth = v.(string)
+			}
 		}
 	}
 	return nil
 }
 
-type Patients struct{
-	Patients []*Patient	
+type Patients struct {
+	Patients []*Patient
+	pattern       *regexp.Regexp
 }
 
-func NewPatients()*Patients{
-	return &Patients{Patients: make([]*Patient, 0)}
+func NewPatients() *Patients {
+	return &Patients{Patients: make([]*Patient, 0),pattern:regexp.MustCompile(`^/patient/(\d+)/?`)}
 }
 func (patients *Patients) GenerateNewID() uint64 {
 	var x uint64 = 0
@@ -78,86 +91,89 @@ func (patients *Patients) GenerateNewID() uint64 {
 	return x
 }
 
-func (patients *Patients)GetPatient(id uint64)(*Patient,error){
-	for _,p:=range patients.Patients{
-		if p.ID==id{
-			return p,nil
+func (patients *Patients) GetPatient(id uint64) (*Patient, error) {
+	for _, p := range patients.Patients {
+		if p.ID == id {
+			return p, nil
 		}
 	}
-	return &Patient{},fmt.Errorf("patient %v not found",id)
+	return &Patient{}, fmt.Errorf("patient %v not found", id)
 }
-func (patients *Patients)AddPatient(p Patient)(*Patient,error){
-	if p.ID!=0{
-		return &Patient{},fmt.Errorf("new patient cannot have id %v",p.ID)
+func (patients *Patients) AddPatient(p Patient) (*Patient, error) {
+	if p.ID != 0 {
+		return &Patient{}, fmt.Errorf("new patient cannot have id %v", p.ID)
 	}
-	p.ID=patients.GenerateNewID()
-	patients.Patients=append(patients.Patients, &p)
-	return &p,nil
+	p.ID = patients.GenerateNewID()
+	patients.Patients = append(patients.Patients, &p)
+	return &p, nil
 }
-func (patients *Patients)DeletePatient(id uint64)(*Patient,error){
-	for i,p:=range patients.Patients{
-		if p.ID==id{
-			patients.Patients=append(patients.Patients[:i],patients.Patients[i+1:]... )
-			return p,nil
+func (patients *Patients) DeletePatient(id uint64) (*Patient, error) {
+	for i, p := range patients.Patients {
+		if p.ID == id {
+			patients.Patients = append(patients.Patients[:i], patients.Patients[i+1:]...)
+			return p, nil
 		}
 	}
-	return &Patient{},fmt.Errorf("patient %v not found",id)
+	return &Patient{}, fmt.Errorf("patient %v not found", id)
 }
 
-func (patients *Patients)UpdatePatient(patient Patient)(*Patient,error){
-	for _,p:=range patients.Patients{
-		if p.ID==patient.ID{
-			*p=patient
-			return p,nil
+func (patients *Patients) UpdatePatient(patient Patient) (*Patient, error) {
+	for _, p := range patients.Patients {
+		if p.ID == patient.ID {
+			*p = patient
+			return p, nil
 		}
 	}
-	return &Patient{},fmt.Errorf("patient %v not found",patient.ID)
+	return &Patient{}, fmt.Errorf("patient %v not found", patient.ID)
 }
 
-
-func (patients *Patients)ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	type Error struct{Error string}
-	if r.URL.Path=="/patient"{
-		switch(r.Method){
-			case http.MethodGet:{
-				patient:=Patient{}
+func (patients *Patients) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	type Error struct{ Error string }
+	if r.URL.Path == "/patient" {
+		switch r.Method {
+		case http.MethodPut:
+			{
+				patient := Patient{}
 				err := json.NewDecoder(r.Body).Decode(&patient)
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
-				p,err:=patients.GetPatient(patient.ID)
-				if err!=nil{
+				p, err := patients.UpdatePatient(patient)
+				if err != nil {
 					json.NewEncoder(w).Encode(Error{Error: err.Error()})
 					return
 				}
 				json.NewEncoder(w).Encode(p)
 				return
 			}
-			case http.MethodPut:{
-				patient:=Patient{}
+		case http.MethodPost:
+			{
+				patient := Patient{}
 				err := json.NewDecoder(r.Body).Decode(&patient)
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
-				p,err:=patients.UpdatePatient(patient)
-				if err!=nil{
+				p, err := patients.AddPatient(patient)
+				if err != nil {
 					json.NewEncoder(w).Encode(Error{Error: err.Error()})
 					return
 				}
 				json.NewEncoder(w).Encode(p)
 				return
 			}
-			case http.MethodDelete:{
-				patient:=Patient{}
+		case http.MethodDelete:
+			{
+				patient := Patient{}
 				err := json.NewDecoder(r.Body).Decode(&patient)
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
-				p,err:=patients.DeletePatient(patient.ID)
-				if err!=nil{
+				p, err := patients.DeletePatient(patient.ID)
+				if err != nil {
 					json.NewEncoder(w).Encode(Error{Error: err.Error()})
 					return
 				}
@@ -166,10 +182,34 @@ func (patients *Patients)ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-	}else if (r.URL.Path=="/patients"){
-		if r.Method==http.MethodGet{
+	} else if r.URL.Path == "/patients" {
+		if r.Method == http.MethodGet {
 			json.NewEncoder(w).Encode(patients.Patients)
 			return
+		}
+	}else{
+		matches :=patients.pattern.FindStringSubmatch(r.URL.Path)
+		if len(matches) == 0 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		id, err := strconv.ParseInt(matches[1], 10, 64)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		switch(r.Method){
+			case http.MethodGet:
+			{
+				
+				p, err := patients.GetPatient(uint64(id))
+				if err != nil {
+					json.NewEncoder(w).Encode(Error{Error: err.Error()})
+					return
+				}
+				json.NewEncoder(w).Encode(p)
+				return
+			}
 		}
 	}
 	w.WriteHeader(http.StatusNotImplemented)
